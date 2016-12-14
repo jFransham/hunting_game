@@ -1,0 +1,9 @@
+[submodule "amethyst"]
+	path = amethyst
+	url = ./amethyst
+[submodule "nphysics"]
+	path = nphysics
+	url = ./nphysics
+[submodule "tobj"]
+	path = tobj
+	url = ./tobj
