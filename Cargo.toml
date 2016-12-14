@@ -1,0 +1,21 @@
+[package]
+name = "hunting_game"
+version = "0.1.0"
+authors = ["Jack Fransham <moonfudgeman@hotmail.co.uk>"]
+
+[dependencies]
+gfx        = "0.12"
+image      = "*"
+nalgebra   = "*"
+
+[dependencies.tobj]
+path = "./tobj"
+
+[dependencies.nphysics2d]
+path = "./nphysics/build/nphysics2d"
+
+[dependencies.ncollide]
+path = "./nphysics/ncollide"
+
+[dependencies.amethyst]
+path = "./amethyst"
