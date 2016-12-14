@@ -1,9 +1,9 @@
 [submodule "amethyst"]
 	path = amethyst
-	url = ./amethyst
+	url = git@github.com:jFransham/amethyst
 [submodule "nphysics"]
 	path = nphysics
-	url = ./nphysics
+	url = git@github.com:jFransham/nphysics
 [submodule "tobj"]
 	path = tobj
-	url = ./tobj
+	url = git@github.com:jFransham/tobj
