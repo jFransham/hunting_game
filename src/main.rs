@@ -40,6 +40,7 @@ mod systems;
 
 use systems::physics::*;
 use texture_loader::PngTextureLoader;
+use obj_loader::ObjLoader;
 
 struct ImpulseProcessor;
 
@@ -231,6 +232,7 @@ fn main() {
     context.asset_manager.register_asset::<Texture>();
 
     context.asset_manager.register_loader::<Texture, PngTextureLoader>("png");
+    context.asset_manager.register_loader::<Mesh, ObjLoader>("png");
 
     let path = format!("{}/resources/assets/", env!("CARGO_MANIFEST_DIR"));
 
