@@ -34,13 +34,11 @@ use ncollide::shape::Cuboid;
 use nphysics2d::math::Vector;
 use nphysics2d::object::RigidBody;
 
-mod texture_loader;
-mod obj_loader;
+mod loaders;
 mod systems;
 
 use systems::physics::*;
-use texture_loader::PngTextureLoader;
-use obj_loader::ObjLoader;
+use loaders::*;
 
 struct ImpulseProcessor;
 
@@ -134,69 +132,91 @@ impl State for HelloWorld {
             .with(camera)
             .build();
 
-        // Generate a square mesh
-        ctx.asset_manager.load_asset::<Texture>("baby", "png");
-        ctx.asset_manager.gen_rectangle("square", 1.0, 1.0);
+        ctx.asset_manager.load_asset::<Texture>("default", "png");
+        ctx.asset_manager.load_asset::<Mesh>("quad", "obj");
+        ctx.asset_manager.gen_rectangle("square", 1., 1.);
 
-        let square = Renderable::new("square", "baby", "baby");
+        let offset = [-0.5, -0.5, 0.];
+        let square = Renderable::new("quad", "default", "default");
         let phys_box = Cuboid::new(Vector::new(0.463, 0.463));
-        let l_trans = LocalTransform::default();
+        let mut l_trans = LocalTransform::default();
+        l_trans.translation = offset.clone();
         let trans = Transform::default();
 
-        world.create_now()
-            .with(square.clone())
-            .with(l_trans)
-            .with(trans)
-            .with(ImpulseComponent::default())
-            .with(
-                PhysicsComponent::new(
-                    RigidBody::new_dynamic(
-                        phys_box.clone(),
-                        0.5,
-                        0.5,
-                        0.9,
+        let dyn_parent =
+            world.create_now()
+                .with(LocalTransform::default())
+                .with(trans.clone())
+                .with(ImpulseComponent::default())
+                .with(
+                    PhysicsComponent::new(
+                        RigidBody::new_dynamic(
+                            phys_box.clone(),
+                            0.5,
+                            0.5,
+                            0.9,
+                        )
                     )
                 )
-            )
+                .build();
+
+        world.create_now()
+            .with(l_trans)
+            .with(trans.clone())
+            .with(Child::new(dyn_parent))
+            .with(square.clone())
             .build();
 
         let mut l_trans = LocalTransform::default();
-        l_trans.translation[1] = 1.5;
-        let trans = Transform::default();
+        l_trans.translation = offset.clone();
 
-        world.create_now()
-            .with(square.clone())
-            .with(l_trans)
-            .with(trans)
-            .with(
-                PhysicsComponent::new(
-                    RigidBody::new_static(
-                        phys_box.clone(),
-                        0.5,
-                        0.5,
+        let stat_parent =
+            world.create_now()
+                .with(LocalTransform::default())
+                .with(trans.clone())
+                .with(
+                    PhysicsComponent::with_position(
+                        RigidBody::new_static(
+                            phys_box.clone(),
+                            0.5,
+                            0.5,
+                        ),
+                        [0.8, 1.2],
                     )
                 )
-            )
+                .build();
+
+        world.create_now()
+            .with(l_trans)
+            .with(trans.clone())
+            .with(Child::new(stat_parent))
+            .with(square.clone())
             .build();
 
         let mut l_trans = LocalTransform::default();
-        l_trans.translation[0] = 0.8;
-        l_trans.translation[1] = 1.2;
-        let trans = Transform::default();
+        l_trans.translation = offset;
 
-        world.create_now()
-            .with(square.clone())
-            .with(l_trans)
-            .with(trans)
-            .with(
-                PhysicsComponent::new(
-                    RigidBody::new_static(
-                        phys_box.clone(),
-                        0.5,
-                        0.5,
+        let stat_parent =
+            world.create_now()
+                .with(LocalTransform::default())
+                .with(trans)
+                .with(
+                    PhysicsComponent::with_position(
+                        RigidBody::new_static(
+                            phys_box.clone(),
+                            0.5,
+                            0.5,
+                        ),
+                        [0., 1.5],
                     )
                 )
-            )
+                .build();
+
+        world.create_now()
+            .with(l_trans)
+            .with(trans.clone())
+            .with(Child::new(stat_parent))
+            .with(square.clone())
             .build();
     }
 
@@ -232,7 +252,7 @@ fn main() {
     context.asset_manager.register_asset::<Texture>();
 
     context.asset_manager.register_loader::<Texture, PngTextureLoader>("png");
-    context.asset_manager.register_loader::<Mesh, ObjLoader>("png");
+    context.asset_manager.register_loader::<Mesh, ObjLoader>("obj");
 
     let path = format!("{}/resources/assets/", env!("CARGO_MANIFEST_DIR"));
 

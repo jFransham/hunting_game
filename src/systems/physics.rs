@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use nalgebra::{Matrix2, Quaternion};
-use nphysics2d::math::{Orientation, Vector, Matrix};
+use nphysics2d::math::{Orientation, Vector};
 use nphysics2d::world::{
     World,
     RigidBodyId,
@@ -9,7 +9,6 @@ use nphysics2d::world::{
 use nphysics2d::object::{
     WorldObject,
     RigidBody,
-    ActivationState,
 };
 
 use amethyst::context::Context;
@@ -34,13 +33,20 @@ impl Component for ImpulseComponent {
 }
 
 pub struct PhysicsComponent {
-    handle: Result<RigidBodyId, RigidBody<Precision>>,
+    handle: Result<RigidBodyId, ([Precision; 2], RigidBody<Precision>)>,
 }
 
 impl PhysicsComponent {
     pub fn new(rgd: RigidBody<Precision>) -> Self {
+        Self::with_position(rgd, [0.; 2])
+    }
+
+    pub fn with_position(
+        rgd: RigidBody<Precision>,
+        pos: [Precision; 2],
+    ) -> Self {
         PhysicsComponent {
-            handle: Err(rgd),
+            handle: Err((pos, rgd)),
         }
     }
 }
@@ -124,28 +130,23 @@ impl Processor<Arc<Mutex<Context>>> for PhysicsProcessor {
                 match phys.handle {
                     Ok(ref uid) => {
                         if let Some(handle) = wrld.get_rigid_body_by_uid(uid) {
-                            let &Matrix {
-                                translation: Vector { x, y },
-                                rotation: rot,
-                            } = handle.borrow().position();
+                            let handle  = handle.borrow();
+                            let pos_rot = handle.position();
+                            let pos     = pos_rot.translation;
+                            let r = matrix_to_quaternion(
+                                pos_rot.rotation.submatrix()
+                            );
 
-                            let quat = matrix_to_quaternion(rot.submatrix());
-
-                            trans.translation = [x, y, 0.];
-                            trans.rotation = [quat.w, quat.i, quat.j, quat.k];
+                            trans.translation = [pos.x, pos.y, 0.];
+                            trans.rotation    = [r.w, r.i, r.j, r.k];
                         }
 
                         continue;
                     }
-                    Err(ref rgd) => {
+                    Err((ref pos, ref rgd)) => {
                         let mut rigid_body = rgd.clone();
 
-                        rigid_body.append_translation(
-                            &Vector::new(
-                                trans.translation[0],
-                                trans.translation[1],
-                            )
-                        );
+                        rigid_body.append_translation(pos.into());
 
                         WorldObject::rigid_body_uid(
                             &wrld.add_rigid_body(rigid_body)
@@ -163,17 +164,10 @@ impl Processor<Arc<Mutex<Context>>> for PhysicsProcessor {
                 let mut handle = handle.borrow_mut();
 
                 if let Some(ng) = impls.angular.take() {
-                    if &ActivationState::Inactive == handle.activation_state() {
-                        handle.activate(1.);
-                    }
                     handle.apply_angular_momentum(ng);
                 }
 
                 if let Some(lin) = impls.linear.take() {
-                    // TODO: Move this into apply_*
-                    if &ActivationState::Inactive == handle.activation_state() {
-                        handle.activate(1.);
-                    }
                     handle.apply_central_impulse(lin);
                 }
             }
