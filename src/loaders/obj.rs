@@ -42,11 +42,11 @@ impl AssetLoaderRaw for ObjLoader {
     }
 }
 
-impl AssetLoader<Renderable> for ObjLoader {
+impl AssetLoader<Vec<Renderable>> for ObjLoader {
     fn from_data(
         _assets: &mut Assets,
         _data: Self,
-    ) -> Option<Renderable> {
+    ) -> Option<Vec<Renderable>> {
         // TODO: Use mtl and textures here, and only preload them in
         //       load_from_data
         // TODO: Should load_from_data be replaced with a function that returns
@@ -57,7 +57,7 @@ impl AssetLoader<Renderable> for ObjLoader {
     fn load_from_data(
         assets: &mut AssetManager,
         mut data: Self,
-    ) -> Option<Renderable> {
+    ) -> Option<Vec<Renderable>> {
         let mut lib_ids = (data.0).1.drain(..).filter_map(
             |name| {
                 let mut split = name.rsplitn(2, '.');
@@ -75,79 +75,120 @@ impl AssetLoader<Renderable> for ObjLoader {
             }
         ).collect::<Vec<_>>();
 
-        let assets_store = assets.read_assets();
+        let materials: MtlLib = {
+            let assets_store = assets.read_assets();
 
-        let material_ids = lib_ids.drain(..).fold(
-            HashMap::new(),
-            |mut last, cur| {
-                if let Some(asset) =
-                    assets_store.get(cur)
-                {
-                    let asset: &Asset<MtlLib> = asset;
-                    last.extend(&asset.0);
+            lib_ids.drain(..).fold(
+                HashMap::new(),
+                |mut last, cur| {
+                    if let Some(asset) =
+                        assets_store.get(cur)
+                    {
+                        let asset: &Asset<MtlLib> = asset;
+                        last.extend(
+                            asset.0.iter().map(|(a, b)| (a.clone(), b.clone()))
+                        );
+                    }
+
+                    last
                 }
+            )
+        };
 
-                last
-            }
-        );
+        (data.0).0.drain(..).map(|model| {
+            let mesh = {
+                let factory_impl = assets.get_loader_mut::<FactoryImpl>()
+                    .expect("Unable to retrieve factory");
 
-        unimplemented!();
+                let verts = verts_from_model(&model).collect::<Vec<_>>();
+
+                new_mesh(factory_impl, &verts, &model.mesh.indices)
+            };
+
+            assets.add_asset(&model.name, mesh);
+
+            let mat = model.mesh.material
+                .and_then(|m| materials.get(&m))
+                .map(|m| &m.diffuse_texture)
+                .and_then(|tex| tex.rsplitn(2, '.').skip(1).next())
+                .map(|m| m as &str)
+                .unwrap_or("default");
+
+            Renderable::new(
+                &model.name,
+                mat,
+                mat,
+            )
+        }).collect::<Vec<_>>().into()
     }
+}
+
+fn verts_from_model<'a>(model: &'a Model) ->
+    impl Iterator<Item=VertexPosNormal> + 'a
+{
+    model.mesh.positions.chunks(3)
+        .zip(model.mesh.normals.chunks(3))
+        .zip(model.mesh.texcoords.chunks(2))
+        .map(
+            |((pos, norms), coords)|
+            VertexPosNormal {
+                pos: [pos[0], pos[1], pos[2]],
+                normal: [norms[0], norms[1], norms[2]],
+                tex_coord: [coords[0], coords[1]],
+            }
+        )
 }
 
 impl AssetLoader<Mesh> for ObjLoader {
     fn from_data(assets: &mut Assets, mut data: Self) -> Option<Mesh> {
-        use gfx::traits::FactoryExt;
+        let mut out_verts   = vec![];
+        let mut out_indices = vec![];
+
+        // TODO: Should I collapse textures together? The alternative, I
+        //       guess, is to make this return a Renderable.
+
+        for model in (data.0).0.drain(..) {
+            let vertices = verts_from_model(&model);
+
+            let offset = out_verts.len() as u32;
+            out_indices.extend(
+                model.mesh.indices.iter().map(|i| i + offset)
+            );
+            out_verts.extend(vertices);
+
+        }
 
         let factory_impl = assets.get_loader_mut::<FactoryImpl>()
             .expect("Unable to retrieve factory");
-        match *factory_impl {
-            FactoryImpl::OpenGL { ref mut factory } => {
-                let mut out_verts   = vec![];
-                let mut out_indices = vec![];
 
-                // TODO: Should I collapse textures together? The alternative, I
-                //       guess, is to make this return a Renderable.
+        Some(new_mesh(factory_impl, &out_verts, &out_indices))
+    }
+}
 
-                for model in (data.0).0.drain(..) {
-                    let vertices = model.mesh.positions.chunks(3)
-                        .zip(model.mesh.normals.chunks(3))
-                        .zip(model.mesh.texcoords.chunks(2))
-                        .map(
-                            |((pos, norms), coords)|
-                                VertexPosNormal {
-                                    pos: [pos[0], pos[1], pos[2]],
-                                    normal: [norms[0], norms[1], norms[2]],
-                                    tex_coord: [coords[0], coords[1]],
-                                }
-                        );
+fn new_mesh<F: ::std::ops::DerefMut<Target=FactoryImpl>>(
+    mut factory_impl: F,
+    buf: &[VertexPosNormal],
+    slc: &[u32],
+) -> Mesh {
+    use gfx::traits::FactoryExt;
 
-                    let offset = out_verts.len() as u32;
-                    out_indices.extend(
-                        model.mesh.indices.iter().map(|i| i + offset)
-                    );
-                    out_verts.extend(vertices);
+    match *factory_impl {
+        FactoryImpl::OpenGL { ref mut factory } => {
+            let (buffer, slice) =
+                factory.create_vertex_buffer_with_slice(
+                    buf,
+                    slc,
+                );
 
+            Mesh {
+                mesh_impl: MeshImpl::OpenGL {
+                    buffer: buffer,
+                    slice: slice,
                 }
-
-                let (buffer, slice) =
-                    factory.create_vertex_buffer_with_slice(
-                        &out_verts,
-                        &out_indices as &[_],
-                    );
-
-                Some(
-                    Mesh {
-                        mesh_impl: MeshImpl::OpenGL {
-                            buffer: buffer,
-                            slice: slice,
-                        }
-                    }
-                )
             }
-            #[cfg(windows)]
-            FactoryImpl::Direct3D {} => unimplemented!(),
-            FactoryImpl::Null => Some(Mesh { mesh_impl: MeshImpl::Null }),
         }
+        #[cfg(windows)]
+        FactoryImpl::Direct3D {} => unimplemented!(),
+        FactoryImpl::Null => Mesh { mesh_impl: MeshImpl::Null },
     }
 }

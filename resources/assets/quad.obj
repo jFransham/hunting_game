@@ -3,7 +3,7 @@
 # should NOT contain faces like:
 # f 1 2 3
 # f 4/1 5/5 3/3
-mtllib quad.mtl
+mtllib quad_mtl.mtl
 o Quad
 usemtl default
 v 0 1 0

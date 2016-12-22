@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["Jack Fransham <moonfudgeman@hotmail.co.uk>"]
 
 [dependencies]
-gfx        = "0.12"
-image      = "*"
-nalgebra   = "*"
+gfx           = "0.12"
+gfx_device_gl = "0.11"
+image         = "*"
+nalgebra      = "*"
 
 [dependencies.tobj]
 path = "./tobj"

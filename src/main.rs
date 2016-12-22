@@ -1,4 +1,7 @@
+#![feature(conservative_impl_trait)]
+
 extern crate gfx;
+extern crate gfx_device_gl;
 extern crate image;
 extern crate amethyst;
 extern crate nalgebra;
@@ -13,7 +16,6 @@ use amethyst::context::{
     ContextConfig,
 };
 use amethyst::context::asset_manager::{
-    Mesh,
     Texture,
     DirectoryStore,
 };
@@ -107,6 +109,8 @@ struct HelloWorld;
 
 impl State for HelloWorld {
     fn on_start(&mut self, ctx: &mut Context, world: &mut World) {
+        use amethyst::context::asset_manager::Asset;
+
         let (w, h) = ctx.renderer.get_dimensions().unwrap();
         let aspect = w as f32 / h as f32;
         let eye    = [0., 0., 0.1];
@@ -133,11 +137,20 @@ impl State for HelloWorld {
             .build();
 
         ctx.asset_manager.load_asset::<Texture>("default", "png");
-        ctx.asset_manager.load_asset::<Mesh>("quad", "obj");
-        ctx.asset_manager.gen_rectangle("square", 1., 1.);
+        let quad = ctx.asset_manager.load_asset::<Vec<Renderable>>(
+            "quad",
+            "obj",
+        ).expect("Cannot load quad");
+        let square = {
+            let assets = ctx.asset_manager.read_assets();
+            let renderables: &Asset<Vec<Renderable>> = assets
+                .get(quad)
+                .expect("Cannot get quad");
+
+            renderables.0[1].clone()
+        };
 
         let offset = [-0.5, -0.5, 0.];
-        let square = Renderable::new("quad", "default", "default");
         let phys_box = Cuboid::new(Vector::new(0.463, 0.463));
         let mut l_trans = LocalTransform::default();
         l_trans.translation = offset.clone();
@@ -243,16 +256,22 @@ impl State for HelloWorld {
 }
 
 fn main() {
+    use loaders::obj::{MtlLib, MtlLoader};
+    use amethyst::context::asset_manager::Mesh;
+
     let mut config = ContextConfig::default();
     config.display_config.backend = "OpenGL".into();
     config.display_config.title   = "Hunting game".into();
     let mut context = Context::new(config);
 
-    context.asset_manager.register_asset::<Mesh>();
+    context.asset_manager.register_asset::<Vec<Renderable>>();
     context.asset_manager.register_asset::<Texture>();
+    context.asset_manager.register_asset::<MtlLib>();
+    context.asset_manager.register_asset::<Mesh>();
 
+    context.asset_manager.register_loader::<MtlLib, MtlLoader>("mtl");
     context.asset_manager.register_loader::<Texture, PngTextureLoader>("png");
-    context.asset_manager.register_loader::<Mesh, ObjLoader>("obj");
+    context.asset_manager.register_loader::<Vec<Renderable>, ObjLoader>("obj");
 
     let path = format!("{}/resources/assets/", env!("CARGO_MANIFEST_DIR"));
 
